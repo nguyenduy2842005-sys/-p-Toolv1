@@ -7,7 +7,10 @@ Chạy: `pip install -r requirements.txt` rồi `streamlit run web_app.py`. Ki�
 |---|---|
 | `fem_core.py` | Core FEM của bạn, **giữ nguyên** (ma trận phần tử, ma trận xoay, tải tương đương, nội lực). |
 | `opt_core.py` | Lõi tối ưu: biến phân Euler–Lagrange + FEM-OC/KKT. |
-| `web_app.py` | Giao diện Streamlit: Lý thuyết · Cột · Dầm vút thon · Toàn khung/dàn. |
+| `web_app.py` | Giao diện Streamlit: Lý thuyết · Cột · Dầm vút thon · Toàn khung/dàn · Động lực học SDOF. |
+| `dynamic_core.py` | Dao động tự do SDOF, tích phân Newmark, phổ đáp ứng đàn hồi và nhà cắt MDOF. |
+| `opensees_core.py` | Khung không gian 3D OpenSeesPy và ba thủ tục động đất đàn hồi. |
+| `opensees_ui.py` | Tab OpenSees 3D, nhập phổ/bản ghi và so sánh đáp ứng ELF/MRSA/THA. |
 | `canvas/index.html` | Canvas vẽ kết cấu (nút/thanh/gối). |
 | `tests/test_core.py` | Kiểm chứng số học. |
 
@@ -22,6 +25,18 @@ Kích thước vẽ ∝ A^γ (γ của họ tiết diện; γ = 0 như chữ I c
    - *Dầm tĩnh định:* F không chứa A′ nên Euler–Lagrange suy biến thành phương trình đại số `A = [λ·n·M·m̄/(Eα)]^(1/(n+1))`; λ giải từ ràng buộc võng.
    - *Dầm siêu tĩnh:* M phụ thuộc A nên không có nghiệm đóng, dùng FEM + KKT rời rạc.
 2. **Toàn khung/dàn:** FEM (tái dùng `fem_core`) + ràng buộc bền/ổn định Euler (FSD) + ràng buộc chuyển vị (OC, rồi SLSQP với đạo hàm liên hợp).
+3. **Động lực học:** dao động tự do SDOF tuyến tính; đáp ứng SDOF đàn hồi và nhà cắt nhiều tầng song tuyến tính có dẻo động học bằng Newmark–Newton; phổ Sd/Sa; lệch tầng và độ dẻo theo thời gian; mốc vượt giới hạn biến dạng quy đổi theo vật liệu đã chọn. Mô hình khung không gian 3D đàn hồi rút gọn độ cứng tầng từ hình học/tiết diện; giao diện có hoạt ảnh dao động 3D. Chức năng tối ưu sơ bộ dò mức tăng tiết diện nhỏ nhất đạt mục tiêu lệch tầng trong bản ghi. Các bộ giải lấy cảm hứng từ ví dụ SDOF/OpenSees trong OPENSEES_SALAR-main và cài độc lập bằng NumPy.
+
+4. **Phương pháp động đất trong mô hình khung nhiều tầng:** tĩnh lực ngang tương đương / Equivalent Lateral Force (ELF) dùng Sa(T₁) nhập từ phổ thiết kế; phổ phản ứng dạng dao động / Modal Response Spectrum Analysis (MRSA) đọc phổ T–Sa CSV và tổ hợp SRSS/CQC; lịch sử thời gian / Time-History Analysis (THA) nhận chuỗi gia tốc nền hoặc tín hiệu điều hòa minh họa. Cả ba được tính trên shear-building rút gọn từ FEM; ELF/MRSA đàn hồi, THA phi tuyến giảm bậc. QCVN 02 chỉ tra thông số nguy hiểm theo địa điểm, không tự tạo accelerogram hay phổ thiết kế hoàn chỉnh.
+
+ELF/MRSA có sẵn **phổ đàn hồi mẫu Type 1**: lấy a₍gR₎ theo địa danh từ QCVN 02:2021/BXD, sau đó áp dụng hệ số nền Type 1, hệ số tầm quan trọng và tỷ số cản theo dạng TCVN 9386-1:2025 / EN 1998-1. Phổ mặc định q=1 để minh họa đàn hồi; khi thiết kế cần dùng phổ giảm theo q và tham số dự án, hoặc nạp/nhập phổ thiết kế riêng.
+
+## Động đất OpenSees 3D
+Tab **Động đất · OpenSees 3D** dựng khung dầm-cột không gian với diaphragm cứng, khối lượng sàn tập trung, chân cột ngàm và phần tử `elasticBeamColumn`. ELF dùng phân tích tĩnh; MRSA dùng mode shape/eigen của OpenSees và tổ hợp SRSS/CQC; THA dùng `UniformExcitation`, `Path` time series, cản Rayleigh và Newmark. Kết quả THA được trình bày bằng gia tốc nền, profile lệch tầng, quỹ đạo V–u và hoạt ảnh biến dạng theo thời gian. Ba phương pháp cùng dùng mô hình đàn hồi để so sánh đáp ứng; phần trăm trong bảng là chênh lệch so với THA, không phải sai số độ chính xác. Mô hình này chưa xét phi tuyến vật liệu, tải trọng trọng lực/P-Delta, tương tác đất-móng hoặc kiểm tra thiết kế đầy đủ.
+
+Quy trình ban đầu tham khảo ví dụ của Salar Delavar Ghashghaei trong [OPENSEES_SALAR](https://github.com/salardelavar/OPENSEES_SALAR) (MIT License). Backend gọi trực tiếp OpenSeesPy 3.8; bộ sinh khung không gian, giao diện và bước so sánh là phần phát triển riêng của Đớp Tool. `pip install -r requirements.txt` cài backend. Trên Windows cần Python 3.12 64-bit vì wheel OpenSeesPy liên kết với `python312.dll`; `Dop_Tool.bat` tạo môi trường `.venv312` để dùng đúng runtime.
+
+**Phạm vi động lực học hiện tại:** FEM khung đàn hồi 3D dùng độ cứng quy đổi từ cốt dọc, sau đó quy đổi sang mô hình nhà cắt phi tuyến một bậc tự do mỗi tầng; sức kháng chảy uốn ước tính từ bố trí cốt dọc; đai dùng trong chỉ số kiềm chế biến dạng giản lược. Chân cột khóa 6 DOF; lực cắt đáy lấy từ lực cắt tầng 1. Sức kháng đai cổ cột chỉ là thành phần thép ngang ước tính, không gồm bê tông, neo, mặt tiếp xúc, đài/móng hay nền đất. Đây chưa phải mô hình thớ RC hay thiết kế liên kết móng. TCVN 5574:2018 là tiêu chuẩn vật liệu/kết cấu bê tông; tiêu chuẩn kháng chấn mới TCVN 9386-1:2025 đã thay thế bản 2012. Thời điểm vượt ngưỡng chỉ có nghĩa trong bản ghi và giả thiết đã nhập, không phải dự báo sụp đổ được chứng nhận.
 
 ## Kiểm chứng đã làm
 - Cột đều: FEM khớp công thức Euler (sai số < 1e-4) cho 3 sơ đồ.
@@ -62,4 +77,4 @@ Các phép kiểm độc lập nằm trong `tests/audit/` (so với SLSQP viết
 - Chiều dài tính toán Euler = k_eff × chiều dài thanh (không phân tích ổn định khung tổng thể, không P-Δ).
 
 ## Chạy trên Windows
-Bấm đúp `Dop_Tool.bat` (lần đầu tự tạo .venv và cài thư viện) → mở Đớp Tool trong cửa sổ riêng (pywebview, nếu không có thì Edge/Chrome chế độ app). `Dop_Tool_Browser.bat` mở bằng trình duyệt thường. Đặt biến `DOP_PORT` để cố định cổng.
+Bấm đúp `Dop_Tool.bat` (lần đầu tự tạo .venv312 với Python 3.12 và cài thư viện) → mở Đớp Tool trong cửa sổ riêng (pywebview, nếu không có thì Edge/Chrome chế độ app). `Dop_Tool_Browser.bat` mở bằng trình duyệt thường. Đặt biến `DOP_PORT` để cố định cổng.
